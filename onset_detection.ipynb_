@@ -1,0 +1,107 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "[mp3 @ 0x556a68c2d420] Using AVStream.codec.time_base as a timebase hint to the muxer is deprecated. Set AVStream.time_base instead.\n",
+      "[mp3 @ 0x556a68c2d420] Using AVStream.codec.time_base as a timebase hint to the muxer is deprecated. Set AVStream.time_base instead.\n"
+     ]
+    }
+   ],
+   "source": [
+    "import IPython\n",
+    "from essentia.standard import *\n",
+    "\n",
+    "\n",
+    "# Loading audio file\n",
+    "audio = MonoLoader(filename='/home/vaichu/projects/IITM/mridangam_tani-avarthanam_1.0/tani1/wave/uks_tani1_file_10.wav')()\n",
+    "\n",
+    "# Phase 1: compute the onset detection function\n",
+    "# The OnsetDetection algorithm provides various onset detection functions. Let's use two of them.\n",
+    "\n",
+    "od1 = OnsetDetection(method='hfc')\n",
+    "od2 = OnsetDetection(method='complex')\n",
+    "\n",
+    "# Let's also get the other algorithms we will need, and a pool to store the results\n",
+    "w = Windowing(type = 'hann')\n",
+    "fft = FFT() # this gives us a complex FFT\n",
+    "c2p = CartesianToPolar() # and this turns it into a pair (magnitude, phase)\n",
+    "pool = essentia.Pool()\n",
+    "\n",
+    "# Computing onset detection functions.\n",
+    "for frame in FrameGenerator(audio, frameSize = 1024, hopSize = 512):\n",
+    "    mag, phase, = c2p(fft(w(frame)))\n",
+    "    pool.add('features.hfc', od1(mag, phase))\n",
+    "    pool.add('features.complex', od2(mag, phase))\n",
+    "\n",
+    "# Phase 2: compute the actual onsets locations\n",
+    "onsets = Onsets()\n",
+    "\n",
+    "onsets_hfc = onsets(# this algo expects a matrix, not a vector\n",
+    "                    essentia.array([ pool['features.hfc'] ]),\n",
+    "\n",
+    "                    # you need to specify weights, but as there is only a single\n",
+    "                    # function, it doesn't actually matter which weight you give it\n",
+    "                    [ 1 ])\n",
+    "\n",
+    "onsets_complex = onsets(essentia.array([ pool['features.complex'] ]), [ 1 ])\n",
+    "\n",
+    "\n",
+    "# Mark onsets on the audio, which we'll write back to disk\n",
+    "# We use beeps instead of white noise and stereo signal as it's more distinctive\n",
+    "\n",
+    "silence = [0.] * len(audio)\n",
+    "\n",
+    "beeps_hfc = AudioOnsetsMarker(onsets=onsets_hfc, type='beep')(silence)\n",
+    "AudioWriter(filename='audio/onsets_hfc_stereo.mp3', format='mp3')(StereoMuxer()(audio, beeps_hfc))\n",
+    "\n",
+    "beeps_complex = AudioOnsetsMarker(onsets=onsets_complex, type='beep')(silence)\n",
+    "AudioWriter(filename='audio/onsets_complex_stereo.mp3', format='mp3')(StereoMuxer()(audio, beeps_complex))"
+   ],
+   "metadata": {
+    "collapsed": false,
+    "pycharm": {
+     "name": "#%%\n"
+    }
+   }
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "outputs": [],
+   "source": [],
+   "metadata": {
+    "collapsed": false,
+    "pycharm": {
+     "name": "#%%\n"
+    }
+   }
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 2
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython2",
+   "version": "2.7.6"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 0
+}
